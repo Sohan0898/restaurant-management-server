@@ -66,6 +66,27 @@ async function run() {
       res.send(result);
     });
 
+    app.put("/myAddedFood/:id", async (req, res) => {
+      const id = req.params.id;
+      const filter = { _id: new ObjectId(id) };
+      const options = { upsert: true };
+      const updateFood = req.body;
+      const food = {
+        $set: {
+          foodName: updateFood.foodName,
+          image: updateFood.image,
+          category: updateFood.category,
+          price: updateFood.price,
+          description: updateFood.description,
+          rating: updateFood.rating,
+          quantity: updateFood.quantity,
+          origin: updateFood.origin,
+        },
+      };
+      const result = await FoodCollection.updateOne(filter, food, options);
+      res.send(result);
+    });
+
     // Connect the client to the server	(optional starting in v4.7)
     await client.connect();
     // Send a ping to confirm a successful connection
