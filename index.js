@@ -25,6 +25,8 @@ const client = new MongoClient(uri, {
 async function run() {
   try {
     const FoodCollection = client.db("FoodDB").collection("myAddedFood");
+    const OrderCollection = client.db("FoodDB").collection("orderedFood");
+
 
 
     app.get('/myAddedFood/:id', async (req, res)=>{
@@ -46,6 +48,13 @@ async function run() {
       const result = await FoodCollection.insertOne(newFood);
       res.send(result);
     });
+
+    app.post("/orderedFood", async (req, res) => {
+        const newOrderedFood = req.body;
+        console.log(newOrderedFood);
+        const result = await OrderCollection.insertOne(newOrderedFood);
+        res.send(result);
+      });
 
     // Connect the client to the server	(optional starting in v4.7)
     await client.connect();
