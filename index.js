@@ -1,6 +1,6 @@
 const express = require("express");
 const cors = require("cors");
-const { MongoClient, ServerApiVersion,ObjectId } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 require("dotenv").config();
 const app = express();
 const ports = process.env.PORT || 5000;
@@ -27,20 +27,30 @@ async function run() {
     const FoodCollection = client.db("FoodDB").collection("myAddedFood");
     const OrderCollection = client.db("FoodDB").collection("orderedFood");
 
+    app.get("/myAddedFood", async (req, res) => {
+      console.log(req.query.email);
+      let query = {};
+      if (req.query?.email) {
+        query = { email: req.query.email };
+      }
+      const result = await FoodCollection.find(query).toArray();
+      console.log(result);
+      res.send(result);
+    });
 
+    app.get("/myAddedFood/:id", async (req, res) => {
+      const id = req.params.id;
+      const filter = { _id: new ObjectId(id) };
+      const result = await FoodCollection.findOne(filter);
+      console.log(result);
+      res.send(result);
+    });
 
-    app.get('/myAddedFood/:id', async (req, res)=>{
-        const id = req.params.id;
-        const query = {_id: new ObjectId(id)}
-        const result = await FoodCollection.findOne(query);
-        res.send(result);
-      })
-
-    app.get('/myAddedFood', async (req, res)=>{
-        const cursor =FoodCollection.find();
-        const result= await  cursor.toArray();
-        res.send(result);
-    })
+    app.get("/myAddedFood", async (req, res) => {
+      const cursor = FoodCollection.find();
+      const result = await cursor.toArray();
+      res.send(result);
+    });
 
     app.post("/myAddedFood", async (req, res) => {
       const newFood = req.body;
@@ -50,11 +60,11 @@ async function run() {
     });
 
     app.post("/orderedFood", async (req, res) => {
-        const newOrderedFood = req.body;
-        console.log(newOrderedFood);
-        const result = await OrderCollection.insertOne(newOrderedFood);
-        res.send(result);
-      });
+      const newOrderedFood = req.body;
+      console.log(newOrderedFood);
+      const result = await OrderCollection.insertOne(newOrderedFood);
+      res.send(result);
+    });
 
     // Connect the client to the server	(optional starting in v4.7)
     await client.connect();
