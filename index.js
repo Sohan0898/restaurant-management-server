@@ -27,6 +27,32 @@ async function run() {
     const FoodCollection = client.db("FoodDB").collection("myAddedFood");
     const OrderCollection = client.db("FoodDB").collection("orderedFood");
 
+    // ordered food
+
+    app.get("/orderedFood/:email", async (req, res) => {
+        const email = req.params.email;
+        const query = { newEmail : email };
+        const result = await OrderCollection.find(query).toArray();
+        console.log(result);
+        res.send(result);
+      });
+
+      app.get("/orderedFood", async (req, res) => {
+        const cursor = OrderCollection.find();
+        const result = await cursor.toArray();
+        res.send(result);
+      });
+
+      app.post("/orderedFood", async (req, res) => {
+        const newOrderedFood = req.body;
+        console.log(newOrderedFood);
+        const result = await OrderCollection.insertOne(newOrderedFood);
+        res.send(result);
+      });
+
+      
+
+    // added food
     app.get("/myAddedFood", async (req, res) => {
       console.log(req.query.email);
       let query = {};
@@ -59,12 +85,6 @@ async function run() {
       res.send(result);
     });
 
-    app.post("/orderedFood", async (req, res) => {
-      const newOrderedFood = req.body;
-      console.log(newOrderedFood);
-      const result = await OrderCollection.insertOne(newOrderedFood);
-      res.send(result);
-    });
 
     app.put("/myAddedFood/:id", async (req, res) => {
       const id = req.params.id;
