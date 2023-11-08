@@ -1,13 +1,22 @@
 const express = require("express");
 const cors = require("cors");
+const jwt = require('jsonwebtoken');
+const cookieParser = require('cookie-parser');
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 require("dotenv").config();
 const app = express();
 const ports = process.env.PORT || 5000;
 
 // middleware
-app.use(cors());
+app.use(cors({
+    origin : [
+        'http://localhost:5173'
+    ],
+    credentials : true
+}
+));
 app.use(express.json());
+app.use(cookieParser())
 
 // mongoDB
 
@@ -22,35 +31,89 @@ const client = new MongoClient(uri, {
   },
 });
 
+
+// middleware
+const logger = (req, res, next) => {
+    console.log('log info :', req.method, req.url );
+    next();
+}
+
+const verifyToken = (req, res, next) => {
+    const token = req?.cookies?.token;
+    // console.log('token middleware', token);
+
+
+    if(!token){
+        return res.status(401).send({message : 'unauthorize access'})
+    }
+    jwt.verify(token, process.env.JWT_TOKEN, (err, decoded) => {
+        if(err){
+            return res.status(401).send({message : 'unauthorize access'})
+        }
+        req.user = decoded;
+        next();
+    })
+
+}
+
 async function run() {
   try {
     const FoodCollection = client.db("FoodDB").collection("myAddedFood");
     const OrderCollection = client.db("FoodDB").collection("orderedFood");
 
+
+    //jwt api 
+    app.post('/jwt', async (req, res) => {
+        const user= req.body;
+        console.log('user token', user);
+        const token = jwt.sign(user, process.env.JWT_TOKEN , {expiresIn: '1hr' });
+
+        res.cookie('token', token, {
+            httpOnly : true,
+            secure : true,
+            sameSite : 'none'
+        })
+        .send({success : true});
+
+
+    })
+
+    app.post('/logOut', async (req, res) => {
+        
+        const user = req.body;
+        console.log('logOut', user);
+        res.clearCookie('token', {maxAge: 0}).send({success:true})
+
+    })
+
+
     // ordered food
 
-    app.get("/orderedFood/:email", async (req, res) => {
+    app.get("/orderedFood/:email", logger, verifyToken, async (req, res) => {
         const email = req.params.email;
         const query = { newEmail : email };
         const result = await OrderCollection.find(query).toArray();
+        // if(req.user.email !== req.query.email){
+        //     return res.status(403).send({message : 'forbidden access'})
+        // }
         console.log(result);
         res.send(result);
       });
 
-      app.get("/orderedFood", async (req, res) => {
+      app.get("/orderedFood", logger, verifyToken, async (req, res) => {
         const cursor = OrderCollection.find();
         const result = await cursor.toArray();
         res.send(result);
       });
 
-      app.post("/orderedFood", async (req, res) => {
+      app.post("/orderedFood", logger, verifyToken, async (req, res) => {
         const newOrderedFood = req.body;
         console.log(newOrderedFood);
         const result = await OrderCollection.insertOne(newOrderedFood);
         res.send(result);
       });
 
-      app.delete('/orderedFood/:id', async (req, res) => {
+      app.delete('/orderedFood/:id', logger, verifyToken,  async (req, res) => {
         const id = req.params.id;
         const query = {_id: new ObjectId(id)}
         const result = await OrderCollection.deleteOne(query);
@@ -59,8 +122,10 @@ async function run() {
      })
 
     // added food
-    app.get("/myAddedFood", async (req, res) => {
+    app.get("/myAddedFood",  async (req, res) => {
       console.log(req.query.email);
+    //   console.log('coookiessss', req.cookies);
+   
       let query = {};
       if (req.query?.email) {
         query = { email: req.query.email };
@@ -84,6 +149,10 @@ async function run() {
       res.send(result);
     });
 
+    app.get("/myAddedFoodCount", async (req, res) => {
+        const count = FoodCollection.estimatedDocumentCount();
+        res.send({count});
+      });
     app.post("/myAddedFood", async (req, res) => {
       const newFood = req.body;
       console.log(newFood);
@@ -92,7 +161,7 @@ async function run() {
     });
 
 
-    app.put("/myAddedFood/:id", async (req, res) => {
+    app.put("/myAddedFood/:id", logger, verifyToken, async (req, res) => {
       const id = req.params.id;
       const filter = { _id: new ObjectId(id) };
       const options = { upsert: true };
