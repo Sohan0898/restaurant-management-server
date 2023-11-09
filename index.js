@@ -1,22 +1,24 @@
 const express = require("express");
 const cors = require("cors");
-const jwt = require('jsonwebtoken');
-const cookieParser = require('cookie-parser');
+const jwt = require("jsonwebtoken");
+const cookieParser = require("cookie-parser");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 require("dotenv").config();
 const app = express();
 const ports = process.env.PORT || 5000;
 
 // middleware
-app.use(cors({
-    origin : [
-        'http://localhost:5173'
+app.use(
+  cors({
+    origin: [
+      "http://localhost:5173",
+      "https://foodie-feast-dfc47a.netlify.app",
     ],
-    credentials : true
-}
-));
+    credentials: true,
+  })
+);
 app.use(express.json());
-app.use(cookieParser())
+app.use(cookieParser());
 
 // mongoDB
 
@@ -31,128 +33,120 @@ const client = new MongoClient(uri, {
   },
 });
 
-
 // middleware
 const logger = (req, res, next) => {
-    console.log('log info :', req.method, req.url );
-    next();
-}
+  console.log("log info :", req.method, req.url);
+  next();
+};
 
 const verifyToken = (req, res, next) => {
-    const token = req?.cookies?.token;
-    // console.log('token middleware', token);
+  const token = req?.cookies?.token;
+  // console.log('token middleware', token);
 
-
-    if(!token){
-        return res.status(401).send({message : 'unauthorize access'})
+  if (!token) {
+    return res.status(401).send({ message: "unauthorize access" });
+  }
+  jwt.verify(token, process.env.JWT_TOKEN, (err, decoded) => {
+    if (err) {
+      return res.status(401).send({ message: "unauthorize access" });
     }
-    jwt.verify(token, process.env.JWT_TOKEN, (err, decoded) => {
-        if(err){
-            return res.status(401).send({message : 'unauthorize access'})
-        }
-        req.user = decoded;
-        next();
-    })
-
-}
+    req.user = decoded;
+    next();
+  });
+};
 
 async function run() {
   try {
     const FoodCollection = client.db("FoodDB").collection("myAddedFood");
     const OrderCollection = client.db("FoodDB").collection("orderedFood");
+    const UserCollection = client.db("FoodDB").collection("user");
 
+    //jwt api
+    app.post("/jwt", async (req, res) => {
+      const user = req.body;
+      console.log("user token", user);
+      const token = jwt.sign(user, process.env.JWT_TOKEN, { expiresIn: "1hr" });
 
-    //jwt api 
-    app.post('/jwt', async (req, res) => {
-        const user= req.body;
-        console.log('user token', user);
-        const token = jwt.sign(user, process.env.JWT_TOKEN , {expiresIn: '1hr' });
-
-        res.cookie('token', token, {
-            httpOnly : true,
-            secure : true,
-            sameSite : 'none'
+      res
+        .cookie("token", token, {
+          httpOnly: true,
+          secure: true,
+          sameSite: "none",
         })
-        .send({success : true});
+        .send({ success: true });
+    });
 
-
-    })
-
-    app.post('/logOut', async (req, res) => {
-        
-        const user = req.body;
-        console.log('logOut', user);
-        res.clearCookie('token', {maxAge: 0}).send({success:true})
-
-    })
-
+    app.post("/logOut", async (req, res) => {
+      const user = req.body;
+      console.log("logOut", user);
+      res.clearCookie("token", { maxAge: 0 }).send({ success: true });
+    });
 
     // ordered food
 
     app.get("/orderedFood/:email", logger, verifyToken, async (req, res) => {
-        const email = req.params.email;
-        const query = { newEmail : email };
-        const result = await OrderCollection.find(query).toArray();
-        // if(req.user.email !== req.query.email){
-        //     return res.status(403).send({message : 'forbidden access'})
-        // }
-        console.log(result);
-        res.send(result);
-      });
-
-      app.get("/orderedFood", logger, verifyToken, async (req, res) => {
-        const cursor = OrderCollection.find();
-        const result = await cursor.toArray();
-        res.send(result);
-      });
-
-      app.post("/orderedFood", logger, verifyToken, async (req, res) => {
-        const newOrderedFood = req.body;
-        console.log(newOrderedFood);
-        const result = await OrderCollection.insertOne(newOrderedFood);
-        res.send(result);
-      });
-
-      app.delete('/orderedFood/:id', logger, verifyToken,  async (req, res) => {
-        const id = req.params.id;
-        const query = {_id: new ObjectId(id)}
-        const result = await OrderCollection.deleteOne(query);
-        res.send(result);
- 
-     })
-
-    // added food
-    app.get("/myAddedFood",  async (req, res) => {
-      console.log(req.query.email);
-    //   console.log('coookiessss', req.cookies);
-   
-      let query = {};
-      if (req.query?.email) {
-        query = { email: req.query.email };
-      }
-      const result = await FoodCollection.find(query).toArray();
+      const email = req.params.email;
+      const query = { newEmail: email };
+      const result = await OrderCollection.find(query).toArray();
+      // if(req.user.email !== req.query.email){
+      //     return res.status(403).send({message : 'forbidden access'})
+      // }
       console.log(result);
       res.send(result);
+    });
+
+    app.get("/orderedFood", logger, verifyToken, async (req, res) => {
+      const cursor = OrderCollection.find();
+      const result = await cursor.toArray();
+      res.send(result);
+    });
+
+    app.post("/orderedFood", logger, verifyToken, async (req, res) => {
+      const newOrderedFood = req.body;
+      console.log(newOrderedFood);
+      const result = await OrderCollection.insertOne(newOrderedFood);
+      res.send(result);
+    });
+
+    app.delete("/orderedFood/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await OrderCollection.deleteOne(query);
+      res.send(result);
+    });
+
+    // added food
+    app.get("/myAddedFood", logger, async (req, res) => {
+      const { email, page, limit, search } = req.query;
+
+      let query = {};
+      if (email) {
+        query = { email };
+      }
+
+      if (search) {
+        // Add search condition based on foodName
+        query.foodName = { $regex: new RegExp(search, "i") };
+      }
+      const skip = (page - 1) * limit;
+
+      const result = await FoodCollection.find(query)
+        .skip(skip)
+        .limit(Number(limit))
+        .toArray();
+      const total = await FoodCollection.estimatedDocumentCount();
+      console.log(result);
+      res.send({ total, result });
     });
 
     app.get("/myAddedFood/:id", async (req, res) => {
       const id = req.params.id;
       const filter = { _id: new ObjectId(id) };
       const result = await FoodCollection.findOne(filter);
-      console.log(result);
+      // console.log(result);
       res.send(result);
     });
 
-    app.get("/myAddedFood", async (req, res) => {
-      const cursor = FoodCollection.find();
-      const result = await cursor.toArray();
-      res.send(result);
-    });
-
-    app.get("/myAddedFoodCount", async (req, res) => {
-        const count = FoodCollection.estimatedDocumentCount();
-        res.send({count});
-      });
     app.post("/myAddedFood", async (req, res) => {
       const newFood = req.body;
       console.log(newFood);
@@ -160,8 +154,7 @@ async function run() {
       res.send(result);
     });
 
-
-    app.put("/myAddedFood/:id", logger, verifyToken, async (req, res) => {
+    app.put("/myAddedFood/:id", async (req, res) => {
       const id = req.params.id;
       const filter = { _id: new ObjectId(id) };
       const options = { upsert: true };
@@ -182,10 +175,18 @@ async function run() {
       res.send(result);
     });
 
+    // user api
+    app.post("/user", async (req, res) => {
+      const newUser = req.body;
+      console.log(newUser);
+      const result = await UserCollection.insertOne(newUser);
+      res.send(result);
+    });
+
     // Connect the client to the server	(optional starting in v4.7)
-    await client.connect();
+    // await client.connect();
     // Send a ping to confirm a successful connection
-    await client.db("admin").command({ ping: 1 });
+    // await client.db("admin").command({ ping: 1 });
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!"
     );
